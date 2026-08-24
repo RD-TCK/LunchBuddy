@@ -1,21 +1,29 @@
 {
-  "name": "mealflow",
+  "name": "web",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "npx turbo run build",
-    "dev": "npx turbo run dev",
-    "lint": "npx turbo run lint",
-    "test": "npx turbo run test",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\""
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.112.3",
+    "date-fns": "^4.4.0",
+    "lucide-react": "^1.33.0",
+    "next": "16.3.2",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
-    "prettier": "^3.0.0",
-    "prisma": "5",
-    "turbo": "latest",
-    "typescript": "^5.0.0"
-  },
-  "packageManager": "pnpm@9.0.0",
-  "dependencies": {
-    "@prisma/client": "5"
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.2",
+    "tailwindcss": "^4",
+    "typescript": "^5"
   }
 }
