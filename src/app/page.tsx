@@ -22,19 +22,19 @@ export default function LandingPage() {
             <Link href="/about" className="hover:text-[#FF5B00] transition-colors">About Us</Link>
             <Link href="/contact" className="hover:text-[#FF5B00] transition-colors">Contact</Link>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link 
               href="/manager-login"
-              className="px-5 py-2.5 text-sm font-bold text-[#0D1D3A] bg-white border-2 border-gray-200 hover:border-[#0D1D3A] rounded-xl transition-all"
+              className="px-3 py-2 sm:px-5 sm:py-2.5 text-xs sm:text-sm font-bold text-[#0D1D3A] bg-white border-2 border-gray-200 hover:border-[#0D1D3A] rounded-xl transition-all whitespace-nowrap"
             >
               Manager Login
             </Link>
             <Link 
               href="/login"
-              className="px-5 py-2.5 text-sm font-bold text-white bg-[#FF5B00] hover:bg-[#E05000] rounded-xl shadow-lg shadow-[#FF5B00]/30 transition-all flex items-center gap-2 group"
+              className="px-3 py-2 sm:px-5 sm:py-2.5 text-xs sm:text-sm font-bold text-white bg-[#FF5B00] hover:bg-[#E05000] rounded-xl shadow-lg shadow-[#FF5B00]/30 transition-all flex items-center gap-1.5 sm:gap-2 group whitespace-nowrap"
             >
-              Student Login
-              <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+              <span>Login</span>
+              <ArrowRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
             </Link>
           </div>
         </div>
@@ -71,6 +71,12 @@ export default function LandingPage() {
                 >
                   Register as Student
                   <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                </Link>
+                <Link 
+                  href="/login?tab=login"
+                  className="w-full sm:hidden px-8 py-4 bg-white hover:bg-slate-50 text-[#0D1D3A] border-2 border-gray-200 font-bold rounded-2xl transition-all flex items-center justify-center gap-2 text-lg text-center"
+                >
+                  Already Registered? Sign In
                 </Link>
               </div>
               

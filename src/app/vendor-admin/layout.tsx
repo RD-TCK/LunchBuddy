@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { LunchBuddyLogo } from '@/components/LunchBuddyLogo';
 import { LogOut, Users, Utensils, BarChart } from 'lucide-react';
 import Link from 'next/link';
@@ -14,6 +14,7 @@ export default function HostelAdminLayout({
 }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     const checkRole = async () => {
@@ -76,9 +77,25 @@ export default function HostelAdminLayout({
         </div>
       </header>
 
-      <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-8">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-8 pb-20">
         {children}
       </main>
+
+      {/* Mobile Navigation */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-green-200 px-6 py-3 flex justify-around items-center z-50 pb-safe">
+        <Link href="/vendor-admin" className={`flex flex-col items-center gap-1 ${pathname === '/vendor-admin' ? 'text-green-700' : 'text-gray-400'}`}>
+          <BarChart size={20} />
+          <span className="text-[10px] font-bold">Dashboard</span>
+        </Link>
+        <Link href="/vendor-admin/orders" className={`flex flex-col items-center gap-1 ${pathname === '/vendor-admin/orders' ? 'text-green-700' : 'text-gray-400'}`}>
+          <Users size={20} />
+          <span className="text-[10px] font-bold">Orders</span>
+        </Link>
+        <Link href="/vendor-admin/scan" className={`flex flex-col items-center gap-1 ${pathname === '/vendor-admin/scan' ? 'text-blue-700' : 'text-gray-400'}`}>
+          <Utensils size={20} />
+          <span className="text-[10px] font-bold">Scan QR</span>
+        </Link>
+      </div>
     </div>
   );
 }

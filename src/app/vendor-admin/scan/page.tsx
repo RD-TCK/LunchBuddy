@@ -81,18 +81,18 @@ export default function QRScannerPage() {
   }, []);
 
   useEffect(() => {
-    // Strict mode guard
     if (initRef.current) return;
     initRef.current = true;
 
     // Small delay to ensure DOM is ready
     const timer = setTimeout(() => {
       if (!mealData) startScanner();
-    }, 300);
+    }, 500);
 
     return () => {
       clearTimeout(timer);
       stopScanner();
+      initRef.current = false;
     };
   }, []);
 
@@ -182,18 +182,18 @@ export default function QRScannerPage() {
             <div className="text-center text-sm font-bold text-gray-400 mb-4 uppercase tracking-wider flex items-center justify-center gap-2">
               <Keyboard size={16} /> OR ENTER TOKEN MANUALLY
             </div>
-            <form onSubmit={handleManualSubmit} className="flex gap-2">
+            <form onSubmit={handleManualSubmit} className="flex flex-col sm:flex-row gap-2">
               <input 
                 type="text" 
                 value={manualToken}
                 onChange={(e) => setManualToken(e.target.value)}
                 placeholder="Paste QR token or Student ID..." 
-                className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500 font-mono text-xs"
+                className="flex-1 w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500 font-mono text-xs"
               />
               <button 
                 type="submit"
                 disabled={loading}
-                className="px-6 py-3 bg-[#0D1D3A] text-white font-bold rounded-xl hover:bg-[#1E3A8A] transition-colors disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+                className="w-full sm:w-auto px-6 py-3 bg-[#0D1D3A] text-white font-bold rounded-xl hover:bg-[#1E3A8A] transition-colors disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
               >
                 {loading ? <Loader2 className="animate-spin" size={20} /> : <QrCode size={20} />}
                 Verify
