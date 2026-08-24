@@ -4,31 +4,46 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
 import { LunchBuddyLogo } from '@/components/LunchBuddyLogo';
-import { LogOut, Calendar, UtensilsCrossed, ClipboardCheck, User, Sparkles } from 'lucide-react';
+import { LogOut, LayoutDashboard, History, User } from 'lucide-react';
 import Link from 'next/link';
 
-export default function DashboardLayout({
+export default function StudentLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<any>(null);
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
-    const checkSession = async () => {
+    const checkRole = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         router.push('/');
-      } else {
-        setUser(session.user);
-        setLoading(false);
+        return;
       }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', session.user.id)
+        .single();
+        
+      if (profile?.role === 'OWNER') {
+        router.push('/admin');
+        return;
+      } else if (profile?.role === 'ADMIN') {
+        router.push('/hostel-admin');
+        return;
+      } else if (profile?.role === 'VENDOR') {
+        router.push('/vendor-admin');
+        return;
+      }
+      setLoading(false);
     };
     
-    checkSession();
+    checkRole();
   }, [router]);
 
   const handleLogout = async () => {
@@ -37,93 +52,68 @@ export default function DashboardLayout({
   };
 
   if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-[#FAF9F5]">
-        <div className="flex flex-col items-center gap-3">
-          <LunchBuddyLogo size="md" iconOnly />
-          <div className="text-sm font-bold text-[#0D1D3A] animate-pulse">Loading LunchBuddy...</div>
-        </div>
-      </div>
-    );
+    return <div className="min-h-screen bg-[#FDF8F5] flex items-center justify-center">Loading Student Portal...</div>;
   }
 
-  const navItems = [
-    { name: 'My Meals', href: '/dashboard', icon: UtensilsCrossed },
-    { name: 'Book Meal', href: '/dashboard/book', icon: Calendar },
-    { name: 'Orders', href: '/dashboard/orders', icon: ClipboardCheck },
-    { name: 'Profile', href: '/dashboard/profile', icon: User },
-  ];
+  const navItemClass = (path: string) => {
+    const isActive = pathname === path;
+    return `flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all ${
+      isActive 
+        ? 'bg-[#0D1D3A] text-white shadow-sm'
+        : 'hover:bg-white text-gray-600 hover:text-[#0D1D3A] hover:shadow-sm'
+    }`;
+  };
 
   return (
-    <div className="min-h-screen bg-[#FAF9F5] text-[#0D1D3A] flex flex-col">
-      {/* Top Navbar */}
-      <header className="sticky top-0 z-40 glass-nav px-6 py-3 border-b border-gray-200/80">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <Link href="/dashboard">
+    <div className="min-h-screen bg-[#FDF8F5] text-[#0D1D3A] flex flex-col">
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md px-6 py-3 border-b border-orange-100">
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <Link href="/dashboard" className="flex items-center gap-4">
             <LunchBuddyLogo size="md" />
+            <span className="hidden sm:block text-xs font-bold px-2 py-1 bg-orange-100 text-[#FF5B00] rounded-md uppercase tracking-wider">Resident</span>
           </Link>
 
-          {/* Desktop Navigation Links */}
-          <nav className="hidden md:flex items-center gap-1 bg-white/80 p-1.5 rounded-2xl border border-gray-200/60 shadow-sm">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = pathname === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all ${
-                    isActive
-                      ? 'bg-[#0D1D3A] text-white shadow-sm'
-                      : 'text-gray-600 hover:text-[#0D1D3A] hover:bg-gray-100/80'
-                  }`}
-                >
-                  <Icon size={16} />
-                  <span>{item.name}</span>
-                </Link>
-              );
-            })}
+          <nav className="hidden md:flex items-center gap-1 bg-orange-50/50 p-1.5 rounded-2xl border border-orange-100/50 shadow-sm">
+            <Link href="/dashboard" className={navItemClass('/dashboard')}>
+              <LayoutDashboard size={16} /> Home
+            </Link>
+            <Link href="/dashboard/history" className={navItemClass('/dashboard/history')}>
+              <History size={16} /> History
+            </Link>
+            <Link href="/dashboard/profile" className={navItemClass('/dashboard/profile')}>
+              <User size={16} /> Profile
+            </Link>
           </nav>
 
-          {/* User Email & Logout */}
-          <div className="flex items-center gap-3">
-            <span className="hidden sm:inline-block text-xs font-semibold text-gray-500 bg-white px-3 py-1.5 rounded-xl border border-gray-200">
-              {user?.email}
-            </span>
-            <button
-              onClick={handleLogout}
-              className="p-2 text-gray-500 hover:text-[#FF5B00] rounded-xl hover:bg-red-50 transition-colors"
-              title="Logout"
-            >
+          <div className="flex items-center gap-2">
+            <Link href="/dashboard/profile" className="p-2 text-gray-500 hover:text-[#0D1D3A] hover:bg-orange-50 rounded-xl transition-colors">
+              <User size={18} />
+            </Link>
+            <button onClick={handleLogout} className="p-2 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors cursor-pointer">
               <LogOut size={18} />
             </button>
           </div>
         </div>
       </header>
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-8">
+      <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-8">
         {children}
       </main>
 
-      {/* Mobile Bottom Navigation Bar */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 px-4 py-2 flex items-center justify-around shadow-lg">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex flex-col items-center gap-1 p-2 text-[10px] font-bold rounded-xl transition-all ${
-                isActive ? 'text-[#FF5B00]' : 'text-gray-400 hover:text-gray-600'
-              }`}
-            >
-              <Icon size={20} />
-              <span>{item.name}</span>
-            </Link>
-          );
-        })}
+      {/* Mobile Navigation */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-3 flex justify-around items-center z-50 pb-safe">
+        <Link href="/dashboard" className={`flex flex-col items-center gap-1 ${pathname === '/dashboard' ? 'text-[#0D1D3A]' : 'text-gray-400'}`}>
+          <LayoutDashboard size={20} />
+          <span className="text-[10px] font-bold">Home</span>
+        </Link>
+        <Link href="/dashboard/history" className={`flex flex-col items-center gap-1 ${pathname === '/dashboard/history' ? 'text-[#0D1D3A]' : 'text-gray-400'}`}>
+          <History size={20} />
+          <span className="text-[10px] font-bold">History</span>
+        </Link>
+        <Link href="/dashboard/profile" className={`flex flex-col items-center gap-1 ${pathname === '/dashboard/profile' ? 'text-[#FF5B00]' : 'text-gray-400'}`}>
+          <User size={20} />
+          <span className="text-[10px] font-bold">Profile</span>
+        </Link>
       </div>
     </div>
   );

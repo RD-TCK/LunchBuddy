@@ -2,167 +2,246 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useRouter } from 'next/navigation';
-import { format } from 'date-fns';
-import { Utensils, Calendar, CheckCircle2, ArrowLeft, Sparkles, Clock } from 'lucide-react';
-import Link from 'next/link';
+import { Calendar as CalendarIcon, Utensils, AlertCircle, CheckCircle2, MapPin, Clock } from 'lucide-react';
 
-// Demo menus if DB has no menus inserted yet
-const DEMO_MENUS = [
-  {
-    id: 'demo-lunch-1',
-    property_id: '00000000-0000-0000-0000-000000000000',
-    type: 'LUNCH',
-    title: 'North Indian Thali Special',
-    description: 'Paneer Butter Masala, Dal Tadka, Jeera Rice, 3 Butter Phulkas, Salad & Gulab Jamun',
-    date: new Date().toISOString().split('T')[0],
-  },
-  {
-    id: 'demo-dinner-1',
-    property_id: '00000000-0000-0000-0000-000000000000',
-    type: 'DINNER',
-    title: 'Comfort Home Tiffin',
-    description: 'Aloo Gobi Dry, Mix Dal Fry, Steamed Basmati Rice, 3 Chapattis & Cucumber Raita',
-    date: new Date().toISOString().split('T')[0],
-  },
-];
-
-export default function BookMealPage() {
+export default function BookMealsPage() {
   const [menus, setMenus] = useState<any[]>([]);
+  const [bookedMealIds, setBookedMealIds] = useState<Set<string>>(new Set());
+  const [colleges, setColleges] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [bookingId, setBookingId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const router = useRouter();
+  const [profile, setProfile] = useState<any>(null);
+  const [propertySettings, setPropertySettings] = useState<any>(null);
+  
+  // State for which college the student wants the lunch delivered to
+  const [selectedCollegeId, setSelectedCollegeId] = useState('');
 
   useEffect(() => {
-    const fetchMenus = async () => {
-      const { data, error } = await supabase
-        .from('menus')
-        .select('*')
-        .order('date', { ascending: true });
-        
-      if (!error && data && data.length > 0) {
-        setMenus(data);
-      } else {
-        // Fallback to demo menus if database doesn't have seed menus yet
-        setMenus(DEMO_MENUS);
-      }
-      setLoading(false);
-    };
-
-    fetchMenus();
+    fetchData();
   }, []);
 
-  const handleBook = async (menu: any) => {
-    setBookingId(menu.id);
-    setError(null);
-    setSuccessMsg(null);
+  const fetchData = async () => {
+    setLoading(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+
+    // Fetch Profile
+    const { data: prof } = await supabase
+      .from('profiles')
+      .select('*, properties(name, lunch_cutoff_time)')
+      .eq('id', session.user.id)
+      .single();
     
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      router.push('/');
+    setProfile(prof);
+    
+    if (prof?.properties) {
+      setPropertySettings(prof.properties);
+    }
+
+    // Only fetch menus if they are approved
+    if (prof?.status === 'APPROVED' && prof.property_id) {
+      // 1. Fetch available menus for this property
+      const today = new Date();
+      const nextWeek = new Date(today);
+      nextWeek.setDate(today.getDate() + 7);
+      
+      const { data: availableMenus } = await supabase
+        .from('menus')
+        .select('*')
+        .eq('property_id', prof.property_id)
+        .gte('date', today.toISOString().split('T')[0])
+        .lte('date', nextWeek.toISOString().split('T')[0])
+        .order('date', { ascending: true });
+        
+      if (availableMenus) setMenus(availableMenus);
+
+      // 2. Fetch the student's existing bookings
+      const { data: existingMeals } = await supabase
+        .from('meals')
+        .select('menu_id')
+        .eq('resident_id', session.user.id);
+        
+      if (existingMeals) {
+        const bookedIds = new Set(existingMeals.map(m => m.menu_id));
+        setBookedMealIds(bookedIds);
+      }
+      
+      // 3. Fetch all colleges for delivery selection
+      const { data: colData } = await supabase.from('colleges').select('*').order('name');
+      if (colData) setColleges(colData);
+    }
+    setLoading(false);
+  };
+
+  const isPastCutoff = (menuDateString: string) => {
+    if (!propertySettings?.lunch_cutoff_time) return false;
+    
+    const menuDate = new Date(menuDateString);
+    const today = new Date();
+    
+    // Only apply cutoff to TODAY's meals. Future meals are always bookable.
+    if (menuDate.toISOString().split('T')[0] !== today.toISOString().split('T')[0]) {
+      return false;
+    }
+
+    // Compare current time with cutoff time (e.g. '10:00:00')
+    const cutoffTime = propertySettings.lunch_cutoff_time;
+    const [cutoffHour, cutoffMinute] = cutoffTime.split(':').map(Number);
+    
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+
+    if (currentHour > cutoffHour || (currentHour === cutoffHour && currentMinute >= cutoffMinute)) {
+      return true; // Past cutoff!
+    }
+    
+    return false;
+  };
+
+  const handleBookMeal = async (menuId: string) => {
+    if (!selectedCollegeId) {
+      alert("Please select a delivery location first!");
       return;
     }
 
-    // Try inserting into Supabase meals table
-    const { error: insertError } = await supabase
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session || !profile?.property_id) return;
+
+    // Optimistic UI update
+    const newBookedSet = new Set(bookedMealIds);
+    newBookedSet.add(menuId);
+    setBookedMealIds(newBookedSet);
+
+    const { error } = await supabase
       .from('meals')
       .insert({
-        menu_id: menu.id.startsWith('demo-') ? null : menu.id,
-        resident_id: user.id,
-        property_id: menu.property_id,
-        status: 'BOOKED'
+        property_id: profile.property_id,
+        menu_id: menuId,
+        resident_id: session.user.id,
+        delivery_college_id: selectedCollegeId, // The new delivery routing!
+        status: 'PENDING'
       });
 
-    if (insertError) {
-      if (insertError.code === '23505') {
-        setError("You have already booked this meal!");
-      } else {
-        // If demo menu, show demo success
-        setSuccessMsg(`Successfully booked ${menu.title}! Your tiffin request is confirmed.`);
-      }
-    } else {
-      setSuccessMsg(`Successfully booked ${menu.title}! Redirecting to dashboard...`);
-      setTimeout(() => {
-        router.push('/dashboard');
-      }, 1500);
+    if (error) {
+      alert("Failed to book meal. Please try again.");
+      const revertedSet = new Set(bookedMealIds);
+      revertedSet.delete(menuId);
+      setBookedMealIds(revertedSet);
     }
-
-    setBookingId(null);
   };
 
+  if (loading) {
+    return <div className="animate-pulse flex items-center justify-center p-12">Loading menu...</div>;
+  }
+
+  if (profile?.account_status === 'PENDING') {
+    return (
+      <div className="max-w-2xl mx-auto mt-12 text-center bg-white p-8 rounded-3xl border border-orange-200">
+        <h2 className="text-xl font-bold text-[#0D1D3A] mb-2">Account Pending Review</h2>
+        <p className="text-gray-500">Your Hostel Manager needs to approve your account before you can book meals.</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6 max-w-4xl mx-auto pb-16">
-      
-      {/* Top Header */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-8 max-w-4xl mx-auto">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <Link href="/dashboard" className="text-xs font-bold text-[#FF5B00] hover:underline flex items-center gap-1 mb-1">
-            <ArrowLeft size={14} /> Back to Dashboard
-          </Link>
-          <h1 className="text-2xl font-extrabold text-[#0D1D3A]">Available Menus</h1>
-          <p className="text-xs text-gray-500 font-medium">Select your meal for today or upcoming days</p>
+          <h1 className="text-3xl font-extrabold text-[#0D1D3A]">Weekly Menu</h1>
+          <p className="text-gray-500 font-medium mt-1">Select your meals and choose where you want them delivered.</p>
+        </div>
+        
+        {/* Universal Delivery Selector */}
+        <div className="bg-white p-3 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-3">
+          <MapPin className="text-[#FF5B00] shrink-0 ml-2" size={20} />
+          <select 
+            className="w-full md:w-64 bg-transparent outline-none text-sm font-bold text-[#0D1D3A] cursor-pointer"
+            value={selectedCollegeId}
+            onChange={(e) => setSelectedCollegeId(e.target.value)}
+          >
+            <option value="" disabled>Choose Delivery College...</option>
+            {colleges.map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
         </div>
       </div>
 
-      {error && (
-        <div className="p-4 bg-red-50 border border-red-200 text-red-700 text-xs font-bold rounded-2xl">
-          ⚠️ {error}
-        </div>
-      )}
-
-      {successMsg && (
-        <div className="p-4 bg-green-50 border border-green-200 text-green-700 text-xs font-bold rounded-2xl flex items-center gap-2">
-          <CheckCircle2 size={18} />
-          <span>{successMsg}</span>
-        </div>
-      )}
-
-      {loading ? (
-        <div className="animate-pulse space-y-4">
-          {[1, 2].map(i => (
-            <div key={i} className="h-40 rounded-3xl bg-gray-200"></div>
-          ))}
+      {menus.length === 0 ? (
+        <div className="bg-white p-12 rounded-3xl border border-gray-200 shadow-sm text-center">
+          <Utensils className="mx-auto text-gray-300 mb-4" size={48} />
+          <h2 className="text-xl font-bold text-[#0D1D3A] mb-2">No Menus Available</h2>
+          <p className="text-gray-500">Your hostel admin hasn't published the menu for this week yet.</p>
         </div>
       ) : (
-        <div className="grid gap-6 sm:grid-cols-2">
-          {menus.map((menu) => (
-            <div key={menu.id} className="bg-white rounded-3xl border border-gray-100 shadow-md overflow-hidden flex flex-col justify-between hover:shadow-xl transition-all">
-              
-              <div className="p-6 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="px-3 py-1 bg-[#FFF4EC] text-[#FF5B00] text-xs font-extrabold rounded-full">
-                    {menu.type}
-                  </span>
-                  <div className="flex items-center text-xs font-semibold text-gray-500 gap-1">
-                    <Calendar size={14} />
-                    <span>{format(new Date(menu.date), 'MMM d, yyyy')}</span>
+        <div className="space-y-6">
+          {menus.map((menu) => {
+            const isBooked = bookedMealIds.has(menu.id);
+            const dateObj = new Date(menu.date);
+            const isToday = dateObj.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+            const cutoffExceeded = isPastCutoff(menu.date);
+            
+            return (
+              <div key={menu.id} className={`bg-white rounded-3xl border ${cutoffExceeded && !isBooked ? 'border-red-200' : 'border-gray-200'} shadow-sm overflow-hidden flex flex-col md:flex-row transition-all relative`}>
+                
+                {/* Date Block */}
+                <div className={`p-6 md:w-48 flex flex-col justify-center items-center md:border-r border-gray-100 ${isToday ? 'bg-orange-50' : 'bg-slate-50'}`}>
+                  <div className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-1">
+                    {dateObj.toLocaleDateString('en-US', { weekday: 'short' })}
                   </div>
+                  <div className={`text-4xl font-black ${isToday ? 'text-[#FF5B00]' : 'text-[#0D1D3A]'}`}>
+                    {dateObj.getDate()}
+                  </div>
+                  <div className="text-sm font-bold text-gray-500 uppercase tracking-widest mt-1">
+                    {dateObj.toLocaleDateString('en-US', { month: 'short' })}
+                  </div>
+                  {isToday && <span className="mt-2 px-2 py-0.5 bg-[#FF5B00] text-white text-[10px] font-bold rounded">TODAY</span>}
                 </div>
 
-                <h3 className="text-xl font-extrabold text-[#0D1D3A]">{menu.title}</h3>
-                <p className="text-xs text-gray-500 leading-relaxed font-medium">
-                  {menu.description}
-                </p>
+                {/* Menu Details & Action */}
+                <div className={`p-6 flex-1 flex flex-col md:flex-row gap-6 justify-between items-center ${cutoffExceeded && !isBooked ? 'opacity-60' : ''}`}>
+                  <div className="flex-1 text-center md:text-left space-y-2">
+                    <div className="flex items-center justify-center md:justify-start gap-2">
+                      <Utensils size={16} className="text-gray-400" />
+                      <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{menu.type}</span>
+                    </div>
+                    <h3 className="text-xl font-bold text-[#0D1D3A]">{menu.title}</h3>
+                    <p className="text-gray-600 text-sm max-w-md">{menu.description}</p>
+                    
+                    {cutoffExceeded && !isBooked && (
+                      <div className="inline-flex items-center gap-1.5 text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded">
+                        <Clock size={12} />
+                        Booking closed at {propertySettings?.lunch_cutoff_time.substring(0,5)}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="shrink-0 w-full md:w-auto">
+                    {isBooked ? (
+                      <div className="px-6 py-3 bg-green-50 text-green-700 font-bold rounded-xl flex items-center justify-center gap-2 border border-green-200 w-full md:w-48">
+                        <CheckCircle2 size={18} />
+                        Booked
+                      </div>
+                    ) : cutoffExceeded ? (
+                       <div className="px-6 py-3 bg-gray-100 text-gray-400 font-bold rounded-xl flex items-center justify-center gap-2 border border-gray-200 w-full md:w-48 cursor-not-allowed">
+                        Missed Deadline
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={() => handleBookMeal(menu.id)}
+                        className="px-6 py-3 bg-[#0D1D3A] text-white font-bold rounded-xl hover:bg-[#1E3A8A] transition-colors shadow-sm w-full md:w-48 text-center"
+                      >
+                        Book Tiffin
+                      </button>
+                    )}
+                  </div>
+                </div>
+                
               </div>
-
-              <div className="p-6 pt-0">
-                <button
-                  onClick={() => handleBook(menu)}
-                  disabled={bookingId === menu.id}
-                  className="w-full py-3.5 bg-[#FF5B00] hover:bg-[#E05000] text-white font-extrabold text-sm rounded-2xl shadow-lg shadow-[#FF5B00]/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  <Utensils size={18} />
-                  <span>{bookingId === menu.id ? 'Booking...' : 'Book This Tiffin'}</span>
-                </button>
-              </div>
-
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
-
     </div>
   );
 }
