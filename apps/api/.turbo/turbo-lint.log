@@ -1,4 +1,0 @@
-
-> api@1.0.0 lint C:\Users\HP\Documents\Mealflow\apps\api
-> eslint "{src,apps,libs,test}/**/*.ts" --fix
-
